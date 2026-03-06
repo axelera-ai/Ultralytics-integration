@@ -390,15 +390,15 @@ class Exporter:
         fmt_keys = fmts_dict["Arguments"][flags.index(True) + 1]
         validate_args(fmt, self.args, fmt_keys)
         if axelera:
-            if not IS_PYTHON_3_10:
-                raise SystemError("Axelera export only supported on Python 3.10.")
             if not self.args.int8:
                 LOGGER.warning("Setting int8=True for Axelera mixed-precision export.")
                 self.args.int8 = True
-            if model.task not in {"detect"}:
-                raise ValueError("Axelera export only supported for detection models.")
             if not self.args.data:
-                self.args.data = "coco128.yaml"  # Axelera default to coco128.yaml
+                # Axelera default to coco128 yaml variants
+                if model.task in {"segment"}:
+                    self.args.data = "coco128-seg.yaml"
+                else:
+                    self.args.data = "coco128.yaml"
         if imx:
             if not self.args.int8:
                 LOGGER.warning("IMX export requires int8=True, setting int8=True.")
@@ -1148,48 +1148,31 @@ class Exporter:
         try:
             from axelera import compiler
         except ImportError:
-            check_apt_requirements(
-                ["libllvm14", "libgirepository1.0-dev", "pkg-config", "libcairo2-dev", "build-essential", "cmake"]
-            )
-
             check_requirements(
-                "axelera-voyager-sdk==1.5.2",
-                cmds="--extra-index-url https://software.axelera.ai/artifactory/axelera-runtime-pypi "
-                "--extra-index-url https://software.axelera.ai/artifactory/axelera-dev-pypi",
+                "axelera-devkit==1.6.0rc1",
+                cmds="--no-cache-dir --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple"
             )
 
         from axelera import compiler
         from axelera.compiler import CompilerConfig
+        from axelera.compiler.config.model_specific import extract_ultralytics_metadata
 
-        self.args.opset = 17  # hardcode opset for Axelera
-        onnx_path = self.export_onnx()
-        model_name = Path(onnx_path).stem
+        model_name = Path(self.file).stem
         export_path = Path(f"{model_name}_axelera_model")
         export_path.mkdir(exist_ok=True)
 
-        if "C2PSA" in self.model.__str__():  # YOLO11
-            config = CompilerConfig(
-                quantization_scheme="per_tensor_min_max",
-                ignore_weight_buffers=False,
-                resources_used=0.25,
-                aipu_cores_used=1,
-                multicore_mode="batch",
-                output_axm_format=True,
-                model_name=model_name,
-            )
-        else:  # YOLOv8
-            config = CompilerConfig(
-                tiling_depth=6,
-                split_buffer_promotion=True,
-                resources_used=0.25,
-                aipu_cores_used=1,
-                multicore_mode="batch",
-                output_axm_format=True,
-                model_name=model_name,
-            )
+        metadata = extract_ultralytics_metadata(self.model)
+        config = CompilerConfig(
+            model_metadata=metadata,
+            resources_used=0.25,
+            aipu_cores_used=1,
+            multicore_mode="batch",
+            output_axm_format=True,
+            model_name=model_name,
+        )
 
         qmodel = compiler.quantize(
-            model=onnx_path,
+            model=self.model,
             calibration_dataset=self.get_int8_calibration_dataloader(prefix),
             config=config,
             transform_fn=self._transform_fn,
@@ -1197,12 +1180,11 @@ class Exporter:
 
         compiler.compile(model=qmodel, config=config, output_dir=export_path)
 
-        axm_name = f"{model_name}.axm"
-        axm_src = Path(axm_name)
-        axm_dst = export_path / axm_name
+        for artifact in [f"{model_name}.axm", "compiler_config_final.toml"]:
+            artifact = Path(artifact)
+            if artifact.exists():
+                artifact.replace(export_path / artifact.name)
 
-        if axm_src.exists():
-            axm_src.replace(axm_dst)
 
         YAML.save(export_path / "metadata.yaml", self.metadata)
 

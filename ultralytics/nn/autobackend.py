@@ -607,26 +607,25 @@ class AutoBackend(nn.Module):
         elif axelera:
             import os
 
-            if not os.environ.get("AXELERA_RUNTIME_DIR"):
-                LOGGER.warning(
-                    "Axelera runtime environment is not activated."
-                    "\nPlease run: source /opt/axelera/sdk/latest/axelera_activate.sh"
-                    "\n\nIf this fails, verify driver installation: https://docs.ultralytics.com/integrations/axelera/#axelera-driver-installation"
-                )
             try:
                 from axelera.runtime import op
             except ImportError:
                 check_requirements(
-                    "axelera_runtime2==0.1.2",
-                    cmds="--extra-index-url https://software.axelera.ai/artifactory/axelera-runtime-pypi",
+                    "axelera-rt==1.6.0rc1",
+                    cmds="--no-cache-dir --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple"
                 )
+                check_requirements(
+                    "axelera-runtime2==0.1.4",
+                    cmds="--no-cache-dir --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple"
+                )
+
             from axelera.runtime import op
 
             w = Path(w)
             if (found := next(w.rglob("*.axm"), None)) is None:
                 raise FileNotFoundError(f"No .axm file found in: {w}")
 
-            ax_model = op.load(str(found))
+            ax_model = op.load(str(found)).optimized()
             metadata = found.parent / "metadata.yaml"
 
         # ExecuTorch
@@ -857,7 +856,7 @@ class AutoBackend(nn.Module):
 
         # Axelera
         elif self.axelera:
-            y = self.ax_model(im.cpu())
+            y = self.ax_model(np.asarray(im.cpu()))
 
         # ExecuTorch
         elif self.pte:
