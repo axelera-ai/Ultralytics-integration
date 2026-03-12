@@ -49,9 +49,12 @@ LIMB_COLORS = POSE_PALETTE[[9, 9, 9, 9, 7, 7, 7, 0, 0, 0, 0, 0, 16, 16, 16, 16, 
 class ConfidenceFilter(op.Operator):
     """Squeeze batch dimension and filter detections by confidence score.
 
-    YOLO26 output is already decoded as (1, 300, 57). This replaces
-    decode_pose which doesn't support yolo26's column layout (class_id
-    at column 5 shifts all keypoints by one).
+    Receives the raw output of op.load() — for YOLO26-pose this is shaped
+    (1, 300, 57): each row is [x0, y0, x1, y1, score, class_id, 17×(kpt_x, kpt_y, kpt_conf)].
+    Column 4 (score) is used for thresholding.
+
+    This replaces decode_pose which doesn't support YOLO26's column layout
+    (class_id at column 5 shifts all keypoints by one).
     """
 
     threshold: float = 0.25

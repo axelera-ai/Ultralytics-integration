@@ -23,6 +23,8 @@ poses = pipeline(frame)                # that's it
 
 ## Examples
 
+We have written two examples using the pipeline code above. It should be straightforward for you to repurpose them for other models and tasks.
+
 | Script | Task | Model |
 |--------|------|-------|
 | `yolo26-pose.py` | Pose estimation — 17 COCO keypoints | YOLO26n-pose (NMS-free) |
@@ -30,11 +32,14 @@ poses = pipeline(frame)                # that's it
 
 ## Installation
 
-Install `axelera-runtime2`, which is exposed for import as `axelera.runtime`:
+If you followed the [Axelera integration guide](../../docs/en/integrations/axelera.md), `axelera-runtime2` is already installed — running `yolo predict` or `yolo val` with an Axelera model auto-installs the runtime dependencies. If you need to install manually:
 
 ```bash
-pip install axelera-runtime2 opencv-python numpy
+pip install axelera-rt==1.6.0rc1 --no-cache-dir --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple
+pip install axelera-runtime2==0.1.4 --no-cache-dir --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple
 ```
+
+You will also need `opencv-python` and `numpy` (likely already present).
 
 ## Compile Your Model
 
@@ -82,18 +87,30 @@ python yolo11-seg.py --model yolo11n-seg.axm --source video.mp4 --conf 0.3 --iou
 
 ## Custom Operators
 
-The pipeline is fully composable — you can drop in your own operators anywhere in the
-sequence for custom filtering, domain-specific logic, or any pre/postprocessing you need.
-Just subclass `op.Operator`:
+The pipeline is fully composable — drop in your own operators anywhere in the sequence.
+Just subclass `op.Operator` and implement `__call__`:
 
 ```python
 class ConfidenceFilter(op.Operator):
     threshold: float = 0.25
 
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x):
+        # Each operator receives the output of the previous one in op.seq().
+        # Here x is the output of the pose detection model — an array of
+        # shape (batch, num_detections, num_values) where each row holds
+        # [bbox, confidence, class_id, keypoints…]. Column 4 is the
+        # confidence score. Squeeze the batch dim and filter by score.
         if x.ndim == 3:
             x = x[0]
         return x[x[:, 4] >= self.threshold]
+```
+
+When the pipeline has multiple branches — like the segmentation example — `op.par()`
+produces a tuple. Use `op.itemgetter()` and `op.pack()` to route each branch, and
+unpack the final result at the call site:
+
+```python
+detections, masks = pipeline(frame)
 ```
 
 The runtime treats custom operators as first-class citizens alongside the built-in ones.
