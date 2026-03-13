@@ -6,10 +6,6 @@ keywords: Axelera AI, Metis AIPU, Voyager SDK, Edge AI, YOLOv8, YOLO26, Model Ex
 
 # Axelera AI Export and Deployment
 
-!!! tip "Experimental Release"
-
-    This is an experimental integration demonstrating deployment on Axelera Metis hardware. Full integration anticipated by **February 2026** with model export without requiring Axelera hardware and standard pip installation.
-
 Ultralytics partners with [Axelera AI](https://www.axelera.ai/) to enable high-performance, energy-efficient inference on [Edge AI](https://www.ultralytics.com/glossary/edge-ai) devices. Export and deploy **Ultralytics YOLO models** directly to the **Metis® AIPU** using the **Voyager SDK**.
 
 ![Axelera AI edge deployment ecosystem for YOLO](https://github.com/user-attachments/assets/c97a0297-390d-47df-bb13-ff1aa499f34a)
@@ -275,4 +271,4 @@ We recommend 100 to 400 images. More than 400 provides no additional benefit and
 
 ### Where can I find the Voyager SDK?
 
-The SDK, drivers, and compiler tools are available via the [Axelera Developer Portal](https://www.axelera.ai/).
+The SDK, drivers, and compiler tools are available via the [Axelera Developer Portal](https://github.com/axelera-ai-hub/voyager-sdk).
