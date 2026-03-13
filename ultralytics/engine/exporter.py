@@ -1185,6 +1185,12 @@ class Exporter:
             if artifact.exists():
                 artifact.replace(export_path / artifact.name)
 
+        # Remove intermediate compiler artifacts, keeping only the compiled model and config
+        keep_suffixes = {".axm"}
+        keep_names = {"compiler_config_final.toml", "metadata.yaml"}
+        for f in export_path.iterdir():
+            if f.is_file() and f.suffix not in keep_suffixes and f.name not in keep_names:
+                f.unlink()
 
         YAML.save(export_path / "metadata.yaml", self.metadata)
 
