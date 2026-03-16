@@ -395,7 +395,9 @@ class Exporter:
                 self.args.int8 = True
             if not self.args.data:
                 # Axelera default to coco128 yaml variants
-                if model.task in {"segment"}:
+                if model.task == "classify":
+                    self.args.data = TASK2DATA["classify"]
+                elif model.task == "segment":
                     self.args.data = "coco128-seg.yaml"
                 else:
                     self.args.data = "coco128.yaml"
