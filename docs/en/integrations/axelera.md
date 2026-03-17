@@ -84,6 +84,7 @@ The following tasks are supported across YOLOv8, YOLO11, and YOLO26 models.
     - **Operating System**: Linux only (Ubuntu 22.04/24.04 recommended)
     - **Hardware**: Axelera AI accelerator ([Metis devices](https://store.axelera.ai/))
     - **Python**: Versions 3.10, 3.11, and 3.12
+    - **System dependency**: `sudo apt install libgl1` (required by OpenCV, not included via `pip`)
 
 ### Ultralytics Installation
 
@@ -141,7 +142,7 @@ Export your trained YOLO models using the standard Ultralytics export command.
 
 !!! warning "First export may fail after dependency update"
 
-    The Axelera compiler requires `numpy<2`. If your environment has `numpy>=2`, the first `yolo export` will auto-downgrade it and then fail. Simply run the export command again — it will succeed on the second run.
+    The Axelera compiler requires `numpy<2`. If your environment has `numpy>=2`, the first `yolo export` will auto-downgrade it but the export will fail due to the stale module state. Simply run the same export command again — it will succeed on the second run.
 
 ### Export Arguments
 
@@ -233,7 +234,7 @@ axdevice
 
 ```
 
-For detailed diagnostics, see the [AxDevice documentation](https://github.com/axelera-ai-hub/voyager-sdk/blob/release/v1.5/docs/reference/axdevice.md).
+For detailed diagnostics, see the [AxDevice documentation](https://github.com/axelera-ai-hub/voyager-sdk/blob/latest/docs/reference/axdevice.md).
 
 ## Maximum Performance
 
@@ -243,15 +244,13 @@ This integration uses single-core configuration for compatibility. For productio
 - Streaming inference pipelines
 - Tiled inferencing for higher-resolution cameras
 
-See the [model-zoo](https://github.com/axelera-ai-hub/voyager-sdk/blob/release/v1.5/docs/reference/model_zoo.md) for FPS benchmarks or [contact Axelera](https://axelera.ai/contact-us) for production support.
+See the [model-zoo](https://github.com/axelera-ai-hub/voyager-sdk/blob/latest/docs/reference/model_zoo.md) for FPS benchmarks or [contact Axelera](https://axelera.ai/contact-us) for production support.
 
 ## Known Issues
 
 !!! warning "Known Limitations"
 
     - **M.2 power limitations**: Large or extra-large models may encounter runtime errors on M.2 accelerators due to power supply constraints.
-
-    - **First inference ImportError**: The first inference run may throw an `ImportError`. Subsequent runs work correctly.
 
 For support, visit the [Axelera Community](https://community.axelera.ai/).
 
