@@ -853,7 +853,7 @@ class AutoBackend(nn.Module):
 
         # Axelera
         elif self.axelera:
-            y = self.ax_model(np.asarray(im.cpu()))
+            y = self.ax_model(im.cpu())
 
         # ExecuTorch
         elif self.pte:
