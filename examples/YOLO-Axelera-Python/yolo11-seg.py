@@ -50,17 +50,21 @@ def build_pipeline(model_path: str, conf: float = 0.25, iou: float = 0.45):
     """
     model_op = op.load(model_path)
     return op.seq(
+        op.colorconvert('RGB', src='BGR'),  # OpenCV reads BGR; models expect RGB
         op.letterbox(640, 640),
         op.totensor(),
         model_op,
-        op.decode_segmentation(algo="yolo11", num_classes=80, num_mask_coeffs=32, confidence_threshold=conf),
+        op.decode_segmentation(algo="yolo11", num_classes=80, num_mask_coeffs=32,
+                               confidence_threshold=conf),
+        # decode_segmentation returns (detections, protos) as a tuple
         op.par(
-            op.seq(op.itemgetter(0), op.nms(iou_threshold=iou, max_boxes=300)),
-            op.itemgetter(1),
+            op.seq(op.itemgetter(0), op.nms(iou_threshold=iou, max_boxes=300)),  # NMS on detections
+            op.itemgetter(1),                                                     # pass protos through
         ),
+        # par() unpacks its result, so the next par() receives (filtered_dets, protos) as two args
         op.par(
-            op.seq(op.pack(), op.itemgetter(0), op.to_image_space()),
-            op.proto_to_mask(),
+            op.seq(op.pack(), op.itemgetter(0), op.to_image_space()),  # re-pack, extract dets, rescale
+            op.proto_to_mask(),                                         # (dets, protos) -> masks
         ),
     ).optimized()
 
@@ -74,9 +78,8 @@ def draw_segmentation(
     Each mask must be resized to its detection's bounding box and placed
     at the correct image coordinates.
     """
-    img = image.copy()
-    overlay = img.copy()
-    h, w = img.shape[:2]
+    overlay = image.copy()  # one copy for mask blending
+    h, w = image.shape[:2]
 
     for i, det in enumerate(detections):
         score = det[4]
@@ -100,17 +103,17 @@ def draw_segmentation(
                 overlay[y0:y1, x0:x1][mask_resized > 127] = color
 
         # Bounding box
-        cv2.rectangle(img, (x0, y0), (x1, y1), color, 2)
+        cv2.rectangle(image, (x0, y0), (x1, y1), color, 2)
 
         # Label
         label = f"{name} {score:.2f}"
         (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-        cv2.rectangle(img, (x0, y0 - th - 4), (x0 + tw, y0), color, -1)
-        cv2.putText(img, label, (x0, y0 - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        cv2.rectangle(image, (x0, y0 - th - 4), (x0 + tw, y0), color, -1)
+        cv2.putText(image, label, (x0, y0 - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
     # Blend mask overlay
-    cv2.addWeighted(overlay, 0.4, img, 0.6, 0, img)
-    return img
+    cv2.addWeighted(overlay, 0.4, image, 0.6, 0, image)
+    return image
 
 
 def main():

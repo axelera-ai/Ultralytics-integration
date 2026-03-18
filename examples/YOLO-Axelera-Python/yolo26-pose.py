@@ -76,6 +76,7 @@ def build_pipeline(model_path: str, conf: float = 0.25):
     """
     model_op = op.load(model_path)
     return op.seq(
+        op.colorconvert('RGB', src='BGR'),  # OpenCV reads BGR; models expect RGB
         op.letterbox(640, 640),
         op.totensor(),
         model_op,
@@ -85,9 +86,7 @@ def build_pipeline(model_path: str, conf: float = 0.25):
 
 
 def draw_pose(image: np.ndarray, detections: np.ndarray, conf: float = 0.25) -> np.ndarray:
-    """Draw pose estimation results on the image."""
-    img = image.copy()
-
+    """Draw pose estimation results on the image (in-place)."""
     for det in detections:
         score = det[4]
         if score < conf:
@@ -95,8 +94,8 @@ def draw_pose(image: np.ndarray, detections: np.ndarray, conf: float = 0.25) -> 
 
         # Bounding box
         x0, y0, x1, y1 = map(int, det[:4])
-        cv2.rectangle(img, (x0, y0), (x1, y1), (0, 255, 0), 2)
-        cv2.putText(img, f"{score:.2f}", (x0, y0 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        cv2.rectangle(image, (x0, y0), (x1, y1), (0, 255, 0), 2)
+        cv2.putText(image, f"{score:.2f}", (x0, y0 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
         # Parse 17 keypoints: columns 6..56, stride 3 (x, y, conf)
         kpts = det[6:].reshape(17, 3)
@@ -108,15 +107,15 @@ def draw_pose(image: np.ndarray, detections: np.ndarray, conf: float = 0.25) -> 
                 color = tuple(int(c) for c in LIMB_COLORS[i][::-1])  # RGB -> BGR
                 pt_a = (int(kp_a[0]), int(kp_a[1]))
                 pt_b = (int(kp_b[0]), int(kp_b[1]))
-                cv2.line(img, pt_a, pt_b, color, 2)
+                cv2.line(image, pt_a, pt_b, color, 2)
 
         # Draw keypoints
         for j, kp in enumerate(kpts):
             if kp[2] > 0.5:
                 color = tuple(int(c) for c in KPT_COLORS[j][::-1])  # RGB -> BGR
-                cv2.circle(img, (int(kp[0]), int(kp[1])), 4, color, -1)
+                cv2.circle(image, (int(kp[0]), int(kp[1])), 4, color, -1)
 
-    return img
+    return image
 
 
 def main():
