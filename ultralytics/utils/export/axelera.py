@@ -41,7 +41,7 @@ def torch2axelera(
         from axelera import compiler
     except ImportError:
         check_requirements(
-            "axelera-devkit==1.6.0rc3",
+            "axelera-devkit==1.6.0rc5",
             cmds="--extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple --pre",
         )
         from axelera import compiler
