@@ -164,7 +164,9 @@ class BaseTrainer:
             self.args.workers = 0  # faster CPU training as time dominated by inference, not dataloading
 
         # Callbacks - initialize early so on_pretrain_routine_start can capture original args.data
-        self.callbacks = _callbacks or callbacks.get_default_callbacks()
+        self.callbacks = copy(_callbacks) if _callbacks else callbacks.get_default_callbacks()
+        for k, v in self.callbacks.items():
+            self.callbacks[k] = v.copy()
 
         # Device count in the launching process; distinct from utils.WORLD_SIZE set in spawned DDP workers
         if self.device.type in {"cpu", "mps"}:
@@ -318,7 +320,8 @@ class BaseTrainer:
         self.model = self.model.to(self.device)
         # channels_last (NHWC) is CUDA-only: lossless and Tensor-Core friendly there, but numerically wrong
         # on MPS and no benefit on CPU
-        if self.args.channels_last and self.device.type == "cuda":
+        channels_last = self.args.channels_last is True or (self.args.channels_last is None and TORCH_1_11)
+        if channels_last and self.device.type == "cuda":
             self.model = self.model.to(memory_format=torch.channels_last)
         elif self.args.channels_last:
             LOGGER.warning(f"'channels_last=True' is only supported on CUDA, ignoring on '{self.device.type}'.")
@@ -410,8 +413,8 @@ class BaseTrainer:
             self.args.batch = self.batch_size = self.auto_batch()
         self._build_train_pipeline()
         self.validator = self.get_validator()
-        self.ema = ModelEMA(self.model)
         self.set_class_weights()  # compute class weights after dataloader is ready
+        self.ema = ModelEMA(self.model)  # after set_class_weights, so the copy carries them at any nesting depth
         if RANK in {-1, 0}:
             metric_keys = self.validator.metrics.keys + self.label_loss_items(prefix="val")
             self.metrics = dict(zip(metric_keys, [0] * len(metric_keys)))
@@ -437,7 +440,8 @@ class BaseTrainer:
         self.train_time_start = time.time()
         self.run_callbacks("on_train_start")
         LOGGER.info(
-            f"Image sizes {self.args.imgsz} train, {self.args.imgsz} val\n"
+            f"Using {len(self.train_loader.dataset)} train, {len(self.test_loader.dataset)} val images for "
+            f"fraction={self.args.fraction} at imgsz={self.args.imgsz}\n"
             f"Using {self.train_loader.num_workers * (self.world_size or 1)} dataloader workers\n"
             f"Logging results to {colorstr('bold', self.save_dir)}\n"
             f"Starting training for " + (f"{self.args.time} hours..." if self.args.time else f"{self.epochs} epochs...")
@@ -721,7 +725,7 @@ class BaseTrainer:
         # save_model would otherwise skip every epoch and the run would finish with no checkpoint on valid input.
         # Resync each poisoned EMA tensor from the live model where finite; any tensor that is non-finite in both is
         # left for the nan_to_num_ pass below, so a usable checkpoint is always written.
-        ema = unwrap_model(self.ema.ema)
+        ema = self.ema.ema
         if not all(torch.isfinite(v).all() for v in ema.state_dict().values() if isinstance(v, torch.Tensor)):
             model_sd = unwrap_model(self.model).state_dict()
             for k, v in ema.state_dict().items():
@@ -783,7 +787,7 @@ class BaseTrainer:
             (dict): A dictionary containing the training/validation/test dataset and category names.
         """
         try:
-            self.args.data = convert_ndjson_to_yolo_if_needed(self.args.data)
+            self.args.data = convert_ndjson_to_yolo_if_needed(self.args.data, self.args.fraction)
 
             # Task-specific dataset checking
             if self.args.task == "classify":
@@ -989,6 +993,7 @@ class BaseTrainer:
                     "freeze",
                     "val",
                     "plots",
+                    "channels_last",
                     "distill_model",
                     "save_dir",
                 ):  # allow arg updates to reduce memory or update device on resume
@@ -1244,7 +1249,9 @@ class MultiTrainer:
                 LOGGER.info(
                     f"\n{colorstr('blue', 'bold', f'MultiTrainer {i + 1}/{len(datasets)}:')} fine-tuning on {data}"
                 )
-                name = Path(str(data)).stem
+                path = Path(str(data))
+                parent = path.parent.name
+                name = Path(os.path.abspath(path.parent)).name if path.stem == "data" and parent else path.stem
                 run_name = name
                 try:
                     overrides = {

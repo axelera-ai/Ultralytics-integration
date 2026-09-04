@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sysconfig
 import tempfile
 import threading
 from collections.abc import Callable
@@ -15,6 +16,8 @@ import torch
 
 from ultralytics.utils import LOGGER, YAML
 from ultralytics.utils.checks import check_requirements
+
+AXELERA_SDK = "1.8.0"  # installed when the environment has none
 
 # Axelera exports mutate process-global state (the PROTOCOL_BUFFERS env var below, plus any working-directory
 # files the compiler emits), so a module-level lock serializes concurrent in-process exports. Cross-process
@@ -45,21 +48,28 @@ def torch2axelera(
     Returns:
         (str): Path to exported Axelera model directory.
     """
-    # Serialize within the process: the steps below mutate process-global state (the protobuf env var and any
-    # working-directory files the compiler writes), so concurrent in-process exports must not overlap.
+    # Serialize within the process: the steps below mutate process-global state (the protobuf and PATH env
+    # vars, plus any working-directory files the compiler writes), so concurrent in-process exports must
+    # not overlap.
     with _AXELERA_EXPORT_LOCK:
-        prev_protobuf = os.environ.get("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION")
-        os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
+        prev_env = os.environ.copy()
         try:
+            os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
+            # The compiler runs `axkernelcc` from PATH, which is missing when the interpreter is launched
+            # by absolute path instead of through an activated environment.
+            scripts_dir = sysconfig.get_path("scripts")  # not sys.executable's parent: they differ system-wide
+            if scripts_dir not in (prev_env.get("PATH") or "").split(os.pathsep):
+                # Prepended: reached only when the interpreter's own directory is missing, so any
+                # axkernelcc already on PATH belongs to another environment and mismatches the devkit.
+                os.environ["PATH"] = os.pathsep.join(filter(None, (scripts_dir, prev_env.get("PATH"))))
             try:
                 from axelera import compiler
             except ImportError:
                 check_requirements(
-                    ["axelera-devkit==1.7.0", "numpy<=2.3.5"],
+                    f"axelera-devkit=={AXELERA_SDK}",
                     cmds="--extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple",
                 )
                 from axelera import compiler
-
             check_requirements("omnimalloc==0.5.0")
             from axelera.compiler import CompilerConfig
             from axelera.compiler.config.model_specific import extract_ultralytics_metadata
@@ -111,12 +121,11 @@ def torch2axelera(
                         f.unlink()
 
                 if metadata is not None:
-                    YAML.save(output_dir / "metadata.yaml", metadata)
+                    # Recorded so a load failure can name the SDK that built the model. The compiler emits
+                    # the .axm, so its version is the one that matters, not the metapackage's.
+                    YAML.save(output_dir / "metadata.yaml", {**metadata, "axelera_sdk": AXELERA_SDK})
 
             return str(output_dir)
         finally:
-            # Restore original PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION value
-            if prev_protobuf is None:
-                os.environ.pop("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", None)
-            else:
-                os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = prev_protobuf
+            os.environ.clear()
+            os.environ.update(prev_env)
