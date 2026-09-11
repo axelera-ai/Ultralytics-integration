@@ -66,7 +66,7 @@ is already installed — running `yolo predict` or `yolo val` with an Axelera
 model auto-installs the runtime dependencies. If you need to install manually:
 
 ```bash
-pip install axelera-rt==1.8.0 --no-cache-dir --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple
+pip install axelera-rt==1.9.0 --no-cache-dir --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple
 ```
 
 You will also need `opencv-python` and `numpy` (likely already present).
@@ -97,9 +97,10 @@ The compiled models are saved to `yolo26n-pose_axelera_model/` and
 > label entry in your own application.
 
 > [!IMPORTANT]
-> Re-export any `.axm` you compiled with an earlier SDK. Voyager SDK
-> 1.8 raises the compiled model format, and older files are rejected at load time
-> with `Unsupported model version: 4.0, expected at least 5.0`.
+> Re-export any `.axm` you compiled with Voyager SDK 1.7 or earlier. 1.8 raised the
+> compiled model format, and older files are rejected at load time with
+> `Unsupported model version: 4.0, expected at least 5.0`. A 1.8 `.axm` loads on 1.9
+> unchanged.
 
 ### Run
 
@@ -152,6 +153,27 @@ python yolo11-seg.py --model yolo11n-seg.axm --source video.mp4 --no-display    
 | `--tracker`    | `tracktrack`        | pose      | Tracking algorithm: `bytetrack`, `oc-sort`, `sort`, `tracktrack`, `none`                                                                                         |
 | `--no-display` | _off_               | all       | Disable the GUI window (headless mode)                                                                                                                           |
 | `--output`     | `output.mp4` (pose) | pose, seg | Output video path. Pose: written in headless mode (`--no-display`). Seg: off by default; renders via the display app, so cannot be combined with `--no-display`. |
+
+## Throughput
+
+Both scripts drive the model through `pipeline.stream(source)`, which keeps four frames in
+flight per AIPU core by default, so one frame's preprocessing overlaps another's execution
+on the chip and all four cores of a Metis stay busy. Nothing extra is needed to get that.
+
+That is why these examples exist alongside `yolo predict`, which runs PyTorch
+preprocessing and builds `Results` objects per image on the host. On `yolo26n` at
+`imgsz=640` over the same 128 images and the same Metis device, streaming a `letterbox` to
+`to_tensor` to `op.load` pipeline measures 102 img/s against 81 img/s for `yolo predict`
+at `batch=32`; see [Maximum Performance](../../docs/en/integrations/axelera.md#maximum-performance).
+
+Two knobs matter if you tune further:
+
+- `pipeline.stream(source, max_in_flight=N)` sets how many frames are outstanding. The
+  default is four per core; lower it when a model's inputs or outputs are large enough that
+  the extra buffers cost more than the overlap buys.
+- `op.load(model, core_allocation=N)` reserves cores for one model. Leave it unset for a
+  single-model pipeline: the scheduler then shares every core it owns, which is what you
+  want. Set it when two models share a device and one must not be starved.
 
 ## What You'll See in the Code
 
