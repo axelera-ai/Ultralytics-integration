@@ -68,14 +68,10 @@ For turnkey solutions, Axelera partners with manufacturers to provide systems pr
 
 ## Supported Tasks
 
-Depth estimation is not supported. SDK 1.9 does compile the depth head, where 1.8 failed to lower it, but the compiled model's depth map does not yet track the PyTorch model closely enough to enable: over 16 images its mean correlation with the FP32 output is 0.67. Two causes are known and neither is addressed here, so the task stays off: depth defaults to four calibration images against the 100 Axelera asks for, and the head's `Resize` requests `align_corners`, which the AI core does not implement and computes with `half_pixel` sampling instead. YOLO26 instance segmentation is not supported by Ultralytics `export` either, but can still be deployed through the Voyager SDK as described below. YOLO26 semantic segmentation is supported.
+Depth estimation is not supported. SDK 1.9 does compile the depth head, where 1.8 failed to lower it, but the compiled model's depth map does not yet track the PyTorch model closely enough to enable. Most of the gap is the calibration set rather than the hardware: `depth` defaults to `depth8.yaml`, whose four images are all indoor depth frames, and a model calibrated on them correlates 0.96 with the FP32 output indoors but only 0.67 on ordinary photographs, with individual images as low as 0.001. Calibrating on 128 varied images instead raises that to 0.95 while still scoring 0.93 indoors, so if you are exporting a depth model pass `data=` with images from your own domain rather than accepting the default. What that does not fix is a 17 to 21% error in the absolute depth values, which is why the task stays off: the head's `Resize` requests `align_corners`, which the AI core does not implement and computes with `half_pixel` sampling instead. YOLO26 instance segmentation and semantic segmentation are supported.
 
-{% set unsupported = ["depth", "yolo26-segment"] %}
+{% set unsupported = ["depth"] %}
 {% include "macros/supported-tasks.md" %}
-
-!!! note
-
-    YOLO26 instance segmentation is not yet supported through the Ultralytics `export` command. Users who need `yolo26-seg` can deploy via the [Voyager SDK](https://github.com/axelera-ai-hub/voyager-sdk) using `deploy.py`, which provides a user-space workaround. Native compiler support will be added in a future release.
 
 ## Installation
 
