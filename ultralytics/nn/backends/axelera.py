@@ -46,11 +46,13 @@ class AxeleraBackend(BaseBackend):
         """Run inference on the Axelera hardware accelerator.
 
         A compiled model accepts a single image, so batches go through the Axelera scheduler, which
-        overlaps host-side quantization with execution on the device. `batch()` takes the whole tensor
-        as one argument and expands its leading dimension: its `*inputs` varargs mean one entry per
-        model input, not per image, and passing one image per argument is rejected. It returns one
-        result per image in input order, each keeping its singleton batch dimension, hence the
-        concatenate below rather than a stack.
+        spreads them over the device's AIPU cores and overlaps each image's host-side quantization
+        with another's execution. That is what makes a batch worth passing: a single image occupies
+        one core and leaves the rest idle. `batch()` takes the whole tensor as one argument and
+        expands its leading dimension: its `*inputs` varargs mean one entry per model input, not per
+        image, and passing one image per argument is rejected. It returns one result per image in
+        input order, each keeping its singleton batch dimension, hence the concatenate below rather
+        than a stack.
 
         Args:
             im (torch.Tensor): Input image tensor in BCHW format, normalized to [0, 1].

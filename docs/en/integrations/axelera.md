@@ -68,7 +68,7 @@ For turnkey solutions, Axelera partners with manufacturers to provide systems pr
 
 ## Supported Tasks
 
-Depth estimation is not supported: the depth head emits operators the Metis AIPU compiler cannot lower. YOLO26 instance segmentation is not supported by Ultralytics `export` either, but can still be deployed through the Voyager SDK as described below. YOLO26 semantic segmentation is supported.
+Depth estimation is not supported. SDK 1.9 does compile the depth head, where 1.8 failed to lower it, but the compiled model's depth map does not yet track the PyTorch model closely enough to enable: over 16 images its mean correlation with the FP32 output is 0.67. Two causes are known and neither is addressed here, so the task stays off: depth defaults to four calibration images against the 100 Axelera asks for, and the head's `Resize` requests `align_corners`, which the AI core does not implement and computes with `half_pixel` sampling instead. YOLO26 instance segmentation is not supported by Ultralytics `export` either, but can still be deployed through the Voyager SDK as described below. YOLO26 semantic segmentation is supported.
 
 {% set unsupported = ["depth", "yolo26-segment"] %}
 {% include "macros/supported-tasks.md" %}
@@ -87,8 +87,8 @@ Depth estimation is not supported: the depth head emits operators the Metis AIPU
     - **Hardware**: Axelera AI accelerator ([Metis devices](https://store.axelera.ai/))
     - **Python**: Versions 3.10, 3.11, 3.12, and 3.13
     - **PyTorch**: `torch>=2.8,<2.13`
-    - **Voyager SDK**: 1.8.0; export installs this devkit version and inference installs this runtime version
-    - **Metis kernel driver**: `metis-dkms` 1.6.2 or newer, installed separately from `pip`
+    - **Voyager SDK**: 1.9.0; export installs this devkit version and inference installs this runtime version
+    - **Metis kernel driver**: `metis-dkms` 1.7.0 or newer, installed separately from `pip`
     - **System dependency**: `sudo apt install libgl1` (required by OpenCV, not included via `pip`)
 
 ### Ultralytics Installation
@@ -121,7 +121,7 @@ For detailed instructions, see our [Ultralytics Installation guide](../quickstar
     sudo sh -c "echo 'deb [signed-by=/etc/apt/keyrings/axelera.gpg] https://software.axelera.ai/artifactory/axelera-apt-source ubuntu24 main' > /etc/apt/sources.list.d/axelera.list"
     ```
 
-3. Install the driver and load it. SDK 1.8 needs `metis-dkms` 1.6.2 or newer, so the newest is installed here:
+3. Install the driver and load it. SDK 1.9 needs `metis-dkms` 1.7.0 or newer, so the newest is installed here:
 
     ```bash
     sudo apt update
@@ -131,10 +131,10 @@ For detailed instructions, see our [Ultralytics Installation guide](../quickstar
 
 !!! note "Keep the kernel driver in sync with the SDK"
 
-    The kernel driver is installed separately from the Python SDK packages, so after upgrading the SDK you must also bring the driver up to that SDK's minimum — 1.6.2 for SDK 1.8. Nothing checks this at install time, and a driver below the minimum leaves the device unavailable: `axdevice` reports the version required and fails to open the device.
+    The kernel driver is installed separately from the Python SDK packages, so after upgrading the SDK you must also bring the driver up to that SDK's minimum — 1.7.0 for SDK 1.9. Nothing checks this at install time, and a driver below the minimum leaves the device unavailable: `axdevice` reports the version required and fails to open the device.
 
     ```text
-    [libaxldev.c:285] Found kernel driver version 1.5.5, but at least version 1.6.2 is required. Please update the kernel driver
+    [libaxldev.c:285] Found kernel driver version 1.6.2, but at least version 1.7.0 is required. Please update the kernel driver
     ERROR: AXR_ERROR_CONNECTION_ERROR: Failed to open device metis-0:4:0
     ```
 
@@ -154,13 +154,15 @@ For detailed instructions, see our [Ultralytics Installation guide](../quickstar
     The first `yolo export format=axelera` or `yolo predict` with an Axelera model will automatically download and install the Axelera SDK packages. This may take several minutes depending on your connection speed, and no progress is shown during the download. To install manually beforehand:
 
     ```bash
-    pip install axelera-devkit==1.8.0 --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple
-    pip install axelera-rt==1.8.0 --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple
+    pip install axelera-devkit==1.9.0 --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple
+    pip install axelera-rt==1.9.0 --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple
     ```
 
-!!! warning "An SDK upgrade invalidates existing exported models"
+!!! note "Models exported with SDK 1.8 keep working"
 
-    SDK 1.8 raises the compiled `.axm` model format version, so `_axelera_model` directories produced by an earlier SDK are rejected at load time. Re-export each model after upgrading:
+    SDK 1.9 does not raise the compiled `.axm` model format, so an `_axelera_model` directory exported with 1.8 loads and runs unchanged. Re-export only to pick up compiler improvements.
+
+    An SDK that does raise the format rejects older directories at load time, which is what an upgrade from 1.7 or earlier reports:
 
     ```text
     Error: Unsupported model version: 4.0, expected at least 5.0
@@ -246,7 +248,7 @@ The Axelera format supports the [Export](../modes/export.md), [Predict](../modes
 | `fraction` | `float`, `int`, or `list` | `1.0`       | Calibration subset as a ratio, image count, or `[train, val, test]` ratios/counts. Two-item lists leave `test` full, while `0` skips it (100-400 images recommended).                                                |
 | `device`   | `str`                     | `None`      | Export device: GPU (`device=0`) or CPU (`device=cpu`).                                                                                                                                                               |
 
-\* Inference with `batch>1` requires Voyager SDK 1.8.0 or newer; models are compiled for a single image.
+\* Models are compiled for a single image, so `batch` does not change the exported model. It sets how many images `predict` hands the Axelera scheduler at once, which is what lets the scheduler use every AIPU core on the device: see [Maximum Performance](#maximum-performance). `batch>1` requires Voyager SDK 1.8.0 or newer.
 
 For all export options, see the [Export Mode documentation](../modes/export.md).
 
@@ -303,11 +305,29 @@ For detailed diagnostics, see the [AxDevice documentation](https://docs.axelera.
 
 ## Maximum Performance
 
-Models are compiled for a single image. Passing several images to [Predict](../modes/predict.md) routes them through the Axelera scheduler (Voyager SDK 1.8 or newer), so `batch>1` runs correctly, though measured end to end on a single device it is no faster than `batch=1`:
+### Pass a batch
+
+Models are compiled for a single image, and a single image occupies one AIPU core while the other three sit idle. Passing several images to [Predict](../modes/predict.md) hands them to the Axelera scheduler together, which spreads them over every core on the device and overlaps one image's host-side quantization with another's execution on the chip:
 
 ```bash
-yolo predict model=yolo26n_axelera_model source=path/to/images batch=8
+yolo predict model=yolo26n_axelera_model source=path/to/images batch=32
 ```
+
+`yolo26n` at `imgsz=640` over 128 [COCO128](../datasets/detect/coco128.md) images, one Metis device, median of three runs:
+
+| `batch` | Throughput |
+| :------ | :--------- |
+| 1       | 36 img/s   |
+| 4       | 45 img/s   |
+| 8       | 61 img/s   |
+| 16      | 67 img/s   |
+| 32      | 81 img/s   |
+
+Larger batches keep more images in flight, so throughput rises until the host-side work in `predict` becomes the limit. Use the largest batch your memory allows for offline throughput, and `batch=1` when per-image latency is what matters.
+
+Voyager SDK 1.8 is flat across this table at roughly 37 img/s: it ran a batch correctly but submitted to each core one frame at a time, so the extra images queued instead of overlapping. Upgrading the SDK is what makes `batch` worth passing.
+
+### Beyond `predict`
 
 For production requiring maximum throughput, the [Axelera Voyager SDK](https://github.com/axelera-ai-hub/voyager-sdk) offers:
 
@@ -315,7 +335,7 @@ For production requiring maximum throughput, the [Axelera Voyager SDK](https://g
 - Compiling one model across several cores
 - Tiled inferencing for higher-resolution cameras
 
-See the [model-zoo](https://docs.axelera.ai/sdk/reference/models/model-zoo) for FPS benchmarks or [contact Axelera](https://axelera.ai/contact-us) for production support.
+Those paths skip the PyTorch pre- and post-processing that `predict` runs on the host, which is the ceiling the table above reaches. See the [model-zoo](https://docs.axelera.ai/sdk/reference/models/model-zoo) for FPS benchmarks or [contact Axelera](https://axelera.ai/contact-us) for production support.
 
 ## Known Issues
 
