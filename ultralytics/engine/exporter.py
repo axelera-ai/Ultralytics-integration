@@ -627,6 +627,8 @@ class Exporter:
             self.args.quantize = "w8a16" if fmt == "qnn" else 8
         if fmt in {"axelera", "hailo"} and not self.args.data:
             self.args.data = TASK2CALIBRATIONDATA.get(model.task)
+        if fmt == "axelera" and self.args.nms is None:
+            self.args.nms = False  # the Axelera runtime decodes the NMS-free head, so keep end2end on
         if fmt == "hailo":
             assert LINUX and not ARM64, "Hailo export is only supported on Linux x86_64."
             blocks = {str(x[2]) for x in model.yaml.get("backbone", []) + model.yaml.get("head", [])}
@@ -652,8 +654,6 @@ class Exporter:
             hailo_archs = ("hailo8", "hailo8l", "hailo10h", "hailo15h", "hailo15l")
             if self.args.name not in hailo_archs:
                 raise ValueError(f"Invalid Hailo architecture '{self.args.name}'. Valid names are {hailo_archs}.")
-        if fmt == "axelera" and model.task == "segment" and any(isinstance(m, Segment26) for m in model.modules()):
-            raise ValueError("Axelera export does not currently support YOLO26 segmentation models.")
         if fmt == "imx":
             if model.task == "depth":
                 raise ValueError("IMX export is not supported for depth models.")
