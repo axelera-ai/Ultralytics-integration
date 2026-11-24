@@ -68,7 +68,7 @@ is already installed — running `yolo predict` or `yolo val` with an Axelera
 model auto-installs the runtime dependencies. If you need to install manually:
 
 ```bash
-pip install axelera-rt==1.9.0 --no-cache-dir --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple
+pip install axelera-rt==1.10.0rc4 --no-cache-dir --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple
 ```
 
 You will also need `opencv-python` and `numpy` (likely already present).
@@ -100,9 +100,9 @@ The compiled models are saved to `yolo26n-pose_axelera_model/` and
 
 > [!IMPORTANT]
 > Re-export any `.axm` you compiled with Voyager SDK 1.7 or earlier. 1.8 raised the
-> compiled model format, and older files are rejected at load time with
-> `Unsupported model version: 4.0, expected at least 5.0`. A 1.8 `.axm` loads on 1.9
-> unchanged.
+> compiled model format, and 1.8 and 1.9 reject older files at load time with
+> `Unsupported model version: 4.0, expected at least 5.0`. 1.10 raises the format
+> again and converts a 1.8 or 1.9 `.axm` when it loads it.
 
 ### Run
 

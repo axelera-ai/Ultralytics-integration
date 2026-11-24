@@ -17,7 +17,7 @@ import torch
 from ultralytics.utils import LOGGER, YAML
 from ultralytics.utils.checks import check_requirements
 
-AXELERA_SDK = "1.9.0"
+AXELERA_SDK = "1.10.0rc4"
 
 # Axelera exports mutate process-global state (the PROTOCOL_BUFFERS and PATH env vars below, plus any working-directory
 # files the compiler emits), so a module-level lock serializes concurrent in-process exports. Cross-process

@@ -10,14 +10,14 @@ keywords: Axelera AI, Metis AIPU, Voyager SDK, Edge AI, YOLOv8, YOLO11, YOLO26, 
 
 ## At a Glance
 
-| Property          | Details                                                                                                                                    |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `format` argument | `axelera`                                                                                                                                  |
-| Output            | `yolo26n_axelera_model/`, a directory with `yolo26n.axm`, `compiler_config_final.toml`, and [`metadata.yaml`](#output-format)              |
-| Runs on           | Axelera Metis AIPUs: Metis PCIe and M.2 cards and the systems built on them, see [Metis Hardware](#metis-hardware)                         |
-| Runtime           | Voyager SDK 1.9.0 on the device: the `axelera-rt` Python package and the [`metis-dkms`](#driver-installation) kernel driver 1.7.0 or newer |
-| Precision         | INT8 only, calibrated on images from `data`. YOLO26n is 21.7 MB                                                                            |
-| Export host       | Linux x86-64 with Python 3.10 to 3.13 and PyTorch 2.8 to 2.14. Not macOS or Windows. The export needs no GPU and no Metis device           |
+| Property          | Details                                                                                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `format` argument | `axelera`                                                                                                                                               |
+| Output            | `yolo26n_axelera_model/`, a directory with `yolo26n.axm`, `compiler_config_final.toml`, and [`metadata.yaml`](#output-format)                           |
+| Runs on           | Axelera Metis AIPUs: Metis PCIe and M.2 cards and the systems built on them, see [Metis Hardware](#metis-hardware)                                      |
+| Runtime           | Voyager SDK 1.10.0rc4 on the device: the `axelera-rt` Python package and the [`axelera-driver-dkms`](#driver-installation) kernel driver 1.8.0 or newer |
+| Precision         | INT8 only, calibrated on images from `data`. YOLO26n is 21.7 MB                                                                                         |
+| Export host       | Linux x86-64 with Python 3.10 to 3.13 and PyTorch 2.8 to 2.14. Not macOS or Windows. The export needs no GPU and no Metis device                        |
 
 !!! tip "Export in the cloud"
 
@@ -29,7 +29,7 @@ Install the Ultralytics package and the Voyager SDK compiler in a virtual enviro
 
 ```bash
 python3 -m venv axelera-env && source axelera-env/bin/activate
-pip install ultralytics axelera-devkit==1.9.0 --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple
+pip install ultralytics axelera-devkit==1.10.0rc4 --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple
 ```
 
 The `pip` command installs Ultralytics from PyPI and `axelera-devkit` with its compiler packages from the package index of Axelera, and with them `onnx`, `onnxruntime`, and `onnxslim`. The compiler supports PyTorch up to 2.14, so pip installed PyTorch 2.14.1; the export itself then installs nothing. The Voyager SDK packages are governed by the [Axelera AI End User License Agreement](https://www.axelera.ai/eula).
@@ -41,7 +41,7 @@ After a plain `pip install ultralytics`, the first export installs `axelera-devk
 | Python           | 3.10 to 3.13. Exports ran with every version from 3.10 to 3.13. On Python 3.9 and 3.14, pip could not install `axelera-devkit` 1.9.0 and its compiler packages                                                                                        |
 | Operating system | Linux. Exports for this page ran on x86-64 Ubuntu 24.04; the check in Ultralytics also lets ARM64 Linux outside Docker through, which was not run. The driver repository in [Driver Installation](#driver-installation) covers Ubuntu 22.04 and 24.04 |
 | PyTorch          | 2.8 or newer for the Axelera export of Ultralytics, and 2.14 or older for the compiler                                                                                                                                                                |
-| `axelera-devkit` | 1.9.0, the version Ultralytics pins                                                                                                                                                                                                                   |
+| `axelera-devkit` | 1.10.0rc4, the version Ultralytics pins                                                                                                                                                                                                               |
 | System library   | `libgl1` for OpenCV on a headless machine: `sudo apt install libgl1`                                                                                                                                                                                  |
 
 To build the Python 3.13 environment that the Ultralytics CI uses for its Axelera export, run the environment builder from the root of a repository checkout. It requires [uv](https://docs.astral.sh/uv/getting-started/installation/) and an installed Ultralytics checkout:
@@ -229,7 +229,7 @@ The export hands the same head to the compiler for every value of `nms`. The sha
 
 On the machine with the Metis device, install the [kernel driver](#driver-installation), install the package with `pip install ultralytics`, and copy the `yolo26n_axelera_model/` directory to it. `YOLO("yolo26n_axelera_model")` then runs the `.axm` file through the `axelera.runtime` module of the `axelera-rt` package. The points below follow from the Ultralytics code and from a computer without a Metis device, not from a run on Metis hardware:
 
-- **Runtime installation**: the first `predict` or `val` installs `axelera-rt==1.9.0` from the package index of Axelera, which can take several minutes. On the computer used for this page that install also replaced `opencv-python` 5.1.0.95 with 4.14.0.94 and `pillow` 13.0.0 with 12.3.0. To install it beforehand, run `pip install axelera-rt==1.9.0 --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple`.
+- **Runtime installation**: the first `predict` or `val` installs `axelera-rt==1.10.0rc4` from the package index of Axelera, which can take several minutes. On the computer used for this page that install also replaced `opencv-python` 5.1.0.95 with 4.14.0.94 and `pillow` 13.0.0 with 12.3.0. To install it beforehand, run `pip install axelera-rt==1.10.0rc4 --extra-index-url https://software.axelera.ai/artifactory/api/pypi/axelera-pypi/simple`.
 - **Fixed input shape**: the model always runs at its export `imgsz`, which Ultralytics reads from `metadata.yaml`.
 - **Batches**: a compiled model takes one image. `predict` hands a larger batch to the Axelera scheduler, see [Maximum Performance](#maximum-performance), and `val` runs one image at a time.
 - **One `.axm` file per directory**: Ultralytics loads the first `.axm` file it finds in the directory and its subdirectories, so keep only one there.
@@ -237,7 +237,7 @@ On the machine with the Metis device, install the [kernel driver](#driver-instal
 
 ### Driver Installation
 
-The Metis kernel driver `metis-dkms` is installed with `apt`, separately from the Python packages.
+The kernel driver `axelera-driver-dkms` is installed with `apt`, separately from the Python packages. It builds and loads the `axelera_aipu` kernel module.
 
 1. Add the Axelera repository key:
 
@@ -259,39 +259,39 @@ The Metis kernel driver `metis-dkms` is installed with `apt`, separately from th
     sudo sh -c "echo 'deb [signed-by=/etc/apt/keyrings/axelera.gpg] https://software.axelera.ai/artifactory/axelera-apt-source ubuntu24 main' > /etc/apt/sources.list.d/axelera.list"
     ```
 
-3. Install the driver and load it. SDK 1.9 needs `metis-dkms` 1.7.0 or newer, so the newest is installed here:
+3. Install the driver and load it. SDK 1.10 needs driver 1.8.0 or newer, so the newest is installed here:
 
     ```bash
     sudo apt update
-    sudo apt install -y metis-dkms
-    sudo modprobe metis
+    sudo apt install -y axelera-driver-dkms
+    sudo modprobe axelera_aipu
     ```
 
 !!! note "Keep the kernel driver in sync with the SDK"
 
-    The kernel driver is installed separately from the Python SDK packages, so after upgrading the SDK you must also bring the driver up to that SDK's minimum — 1.7.0 for SDK 1.9. Nothing checks this at install time, and a driver below the minimum leaves the device unavailable: `axdevice` reports the version required and fails to open the device.
+    The kernel driver is installed separately from the Python SDK packages, so after upgrading the SDK you must also bring the driver up to that SDK's minimum: 1.8.0 for SDK 1.10. Nothing checks this at install time, and a driver below the minimum leaves the device unavailable: `axdevice` reports the version required and fails to open the device. With SDK 1.9 and driver 1.6.2 it reported:
 
     ```text
     [libaxldev.c:285] Found kernel driver version 1.6.2, but at least version 1.7.0 is required. Please update the kernel driver
     ERROR: AXR_ERROR_CONNECTION_ERROR: Failed to open device metis-0:4:0
     ```
 
-    See also [Step 3: Install the Metis kernel driver](https://docs.axelera.ai/sdk/user-guides/sdk-install#step-3-install-the-metis-kernel-driver). If you are already running an earlier SDK on Ubuntu, update the driver and reload the kernel module (no reboot required):
+    See also [Step 3: Install the Metis kernel driver](https://docs.axelera.ai/sdk/user-guides/sdk-install#step-3-install-the-metis-kernel-driver). Driver 1.8.1 renamed the package from `metis-dkms` to `axelera-driver-dkms` and the kernel module from `metis` to `axelera_aipu`, and the new package replaces the old one. If you are already running SDK 1.9 or earlier on Ubuntu, install the new driver and switch the kernel module (no reboot required):
 
     ```bash
     sudo apt update
-    sudo apt install -y metis-dkms
+    sudo apt install -y axelera-driver-dkms
     sudo rmmod metis
-    sudo modprobe metis
+    sudo modprobe axelera_aipu
     ```
 
     Then re-run `axdevice` to confirm the device is detected.
 
-!!! note "Models exported with SDK 1.8 keep working"
+!!! note "Models exported with SDK 1.8 or 1.9 keep working"
 
-    SDK 1.9 does not raise the compiled `.axm` model format, so an `_axelera_model` directory exported with 1.8 loads and runs unchanged. Re-export only to pick up compiler improvements.
+    SDK 1.10 raises the compiled `.axm` model format from 5.0 to 6.0, and its runtime converts a model in format 5, which SDK 1.8 and 1.9 write, when it loads it. An `_axelera_model` directory exported with 1.8 or 1.9 therefore loads without a re-export. Re-export only to pick up compiler improvements.
 
-    An SDK that does raise the format rejects older directories at load time, which is what an upgrade from 1.7 or earlier reports:
+    A directory exported with SDK 1.7 or earlier has format 4 and is rejected at load time, so export it again. SDK 1.8 and 1.9 report:
 
     ```text
     Error: Unsupported model version: 4.0, expected at least 5.0
@@ -353,15 +353,24 @@ Those paths skip the PyTorch pre- and post-processing that `predict` runs on the
 
 - **Export host**: on macOS the export stops with `export is only supported on Linux and is not supported on ARM64 Docker.` before it installs anything, and the same check stops it on Windows and in a Docker container on ARM64 Linux, where it was not run for this page. Export on a Linux computer or with [Ultralytics Platform](../platform/train/models.md#export-model).
 - **First export after a plain install**: with only `pip install ultralytics`, which installed PyTorch 2.15.0, the first export installs `axelera-devkit`, which replaces it with PyTorch 2.14.1, logs `Restart runtime or rerun command for updates to take effect`, and fails with `Could not find a qtoolsv2 C++ extension compatible with torch 2.15.0.` Run the export again, or install the compiler first as in the [Quickstart](#quickstart).
-- **Automatic installation turned off**: with `YOLO_AUTOINSTALL=false` and no compiler installed, the export logs `Ultralytics requirement ['axelera-devkit==1.9.0'] not found, AutoUpdate disabled by YOLO_AUTOINSTALL=False` and fails with `Axelera export requires axelera-devkit==1.9.0.` After the install command of the [Quickstart](#quickstart), the export runs with `YOLO_AUTOINSTALL=false`.
+- **Automatic installation turned off**: with `YOLO_AUTOINSTALL=false` and no compiler installed, the export logs `Ultralytics requirement ['axelera-devkit==1.10.0rc4'] not found, AutoUpdate disabled by YOLO_AUTOINSTALL=False` and fails with `Axelera export requires axelera-devkit==1.10.0rc4.` After the install command of the [Quickstart](#quickstart), the export runs with `YOLO_AUTOINSTALL=false`.
 - **`batch` above 1**: the export fails with `Axelera: export failure` and `Lowering failed.`, for example with `AssertionError: Only batch sizes of 1 supported` for YOLOv8n. YOLO26n, YOLO11n, and YOLO26n classification models failed in the same step. Export with the default `batch=1`.
 - **Image size below 64**: `imgsz=32` fails with `Axelera export requires imgsz>=64, but got imgsz=[32, 32].`
+- **Large models at their default image size**: some extra-large models do not compile at the default `imgsz` of their checkpoint. Export them at a smaller size, for example `yolo export model=yolov8x-obb.pt format=axelera imgsz=768`. These are the largest sizes that compiled with a pre-release of SDK 1.10:
+
+    | Checkpoint           | Default `imgsz` | Largest `imgsz` that compiled |
+    | -------------------- | --------------- | ----------------------------- |
+    | `yolo11x-obb.pt`     | `1024`          | `640`                         |
+    | `yolo26x-obb.pt`     | `1024`          | `896`                         |
+    | `yolov8x-obb.pt`     | `1024`          | `768`                         |
+    | `yolov8x-pose-p6.pt` | `1280`          | PENDING                       |
+
 - **`dynamic`, `opset`, and `simplify`**: `dynamic=True`, any `opset`, and `simplify=False` fail with `argument 'dynamic' is not supported for format='axelera'`, and the same message for `opset` and `simplify`; `simplify=True` is the default and passes. The model has a fixed input size; export again to change it.
 - **Operator warnings**: for the YOLO26n and YOLO11n models the compiler lists `Reshape`, `Transpose`, `MatMul`, and `Softmax` nodes of the attention blocks and logs `The operator compatibility warnings above suggest this model may not be supported by the Axelera Compiler.` These exports completed.
 - **Small calibration sets**: the default datasets of the semantic segmentation, depth, and pose tasks hold 4 images, so their exports log the calibration warning. See [Calibration](#calibration).
 - **Output directory**: every export of one checkpoint writes the same `yolo26n_axelera_model/` directory, whatever its `imgsz`, `data`, or `nms`, and replaces it. Rename the directory before you export a second variant, and keep `_axelera_model` in its name: a copy named `yolo26n_metis` failed with `is not a supported model format`.
 - **Missing model file**: a directory without an `.axm` file fails with `No .axm file found in: empty_axelera_model`.
-- **Inference without a Metis device**: on the x86-64 export host, the first `predict` with the exported model failed with `Axelera inference requires axelera-rt==1.9.0.` when `axelera-rt` was missing and automatic installation was off, and with `this host has no dmabuf heap; pass input_dmabuf=False, output_dmabuf=False to AxRuntimeModel if you want host-allocated buffers` once it was installed. Validate the PyTorch checkpoint on the export host instead; this does not check the INT8 computation of the `.axm` file.
+- **Inference without a Metis device**: on the x86-64 export host, the first `predict` with the exported model failed with `Axelera inference requires axelera-rt==1.10.0rc4.` when `axelera-rt` was missing and automatic installation was off, and with `this host has no dmabuf heap; pass input_dmabuf=False, output_dmabuf=False to AxRuntimeModel if you want host-allocated buffers` once it was installed. Validate the PyTorch checkpoint on the export host instead; this does not check the INT8 computation of the `.axm` file.
 - **M.2 power limitations**: large or extra-large models may encounter runtime errors on M.2 accelerators due to power supply constraints.
 
 For other errors, see the [Common Issues guide](../guides/yolo-common-issues.md).
@@ -421,7 +430,7 @@ For turnkey solutions, Axelera partners with manufacturers to provide systems pr
 
 ### Do I need a Metis device to export a model?
 
-No. The Voyager SDK compiler runs on a Linux computer, and every export on this page ran on a server without Axelera hardware and with no GPU visible to the export. You need the device, with the `metis-dkms` driver and `axelera-rt`, only to run or validate the `.axm` file.
+No. The Voyager SDK compiler runs on a Linux computer, and every export on this page ran on a server without Axelera hardware and with no GPU visible to the export. You need the device, with the `axelera-driver-dkms` driver and `axelera-rt`, only to run or validate the `.axm` file.
 
 ### Can I test an Axelera model on my PC before I copy it to the device?
 
